@@ -3,7 +3,7 @@
  *
  * This file is part of the miniSEED Library.
  *
- * Copyright (c) 2019 Chad Trabant, IRIS Data Management Center
+ * Copyright (c) 2020 Chad Trabant, IRIS Data Management Center
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ static int byteorder = -1;
 static char *outfile = NULL;
 
 static int parameter_proc (int argcount, char **argvec);
-static void print_stderr (char *message);
+static void print_stderr (const char *message);
 static void usage (void);
 
 /* A simple, expanding sinusoid of 500 samples.
@@ -116,7 +116,7 @@ main (int argc, char **argv)
   /* Redirect libmseed logging facility to stderr for consistency */
   ms_loginit (print_stderr, NULL, print_stderr, NULL);
 
-  /* Process given parameters (command line and parameter file) */
+  /* Process command line arguments */
   if (parameter_proc (argc, argv) < 0)
     return -1;
 
@@ -127,7 +127,7 @@ main (int argc, char **argv)
   }
 
   /* Set up record parameters */
-  strcpy (msr->sid, "XFDSN:XX_TEST__L_H_Z");
+  strcpy (msr->sid, "FDSN:XX_TEST__L_H_Z");
   msr->reclen = reclen;
   msr->pubversion = 1;
   msr->starttime = ms_timestr2nstime ("2012-01-01T00:00:00");
@@ -206,7 +206,7 @@ main (int argc, char **argv)
 /***************************************************************************
  * parameter_proc:
  *
- * Process the command line parameters.
+ * Process the command line arguments.
  *
  * Returns 0 on success, and -1 on failure
  ***************************************************************************/
@@ -275,7 +275,7 @@ parameter_proc (int argcount, char **argvec)
  * Print messsage to stderr.
  ***************************************************************************/
 static void
-print_stderr (char *message)
+print_stderr (const char *message)
 {
   fprintf (stderr, "%s", message);
 } /* End of print_stderr() */

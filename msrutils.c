@@ -3,7 +3,7 @@
  *
  * This file is part of the miniSEED Library.
  *
- * Copyright (c) 2019 Chad Trabant, IRIS Data Management Center
+ * Copyright (c) 2023 Chad Trabant, EarthScope Data Services
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,8 @@
  * @param[in] msr A ::MS3Record to re-initialize
  *
  * @returns a pointer to a ::MS3Record struct on success or NULL on error.
+ *
+ * \ref MessageOnError - this function logs a message on error
  ***************************************************************************/
 MS3Record *
 msr3_init (MS3Record *msr)
@@ -59,7 +61,7 @@ msr3_init (MS3Record *msr)
 
   if (msr == NULL)
   {
-    ms_log (2, "%s(): Cannot allocate memory\n", __func__);
+    ms_log (2, "Cannot allocate memory\n");
     return NULL;
   }
 
@@ -112,6 +114,8 @@ msr3_free (MS3Record **ppmsr)
  * @param[in] datadup Flag to control duplication of data samples
  *
  * @returns Pointer to a new ::MS3Record on success and NULL on error
+ *
+ * \ref MessageOnError - this function logs a message on error
  ***************************************************************************/
 MS3Record *
 msr3_duplicate (MS3Record *msr, int8_t datadup)
@@ -121,7 +125,10 @@ msr3_duplicate (MS3Record *msr, int8_t datadup)
   int samplesize = 0;
 
   if (!msr)
+  {
+    ms_log (2, "Required argument not defined: 'msr'\n");
     return NULL;
+  }
 
   /* Allocate target MS3Record structure */
   if ((dupmsr = msr3_init (NULL)) == NULL)
@@ -140,7 +147,7 @@ msr3_duplicate (MS3Record *msr, int8_t datadup)
     /* Allocate memory for new FSDH structure */
     if ((dupmsr->extra = (char *)libmseed_memory.malloc (msr->extralength)) == NULL)
     {
-      ms_log (2, "%s(): Error allocating memory\n", __func__);
+      ms_log (2, "Error allocating memory\n");
       msr3_free (&dupmsr);
       return NULL;
     }
@@ -156,7 +163,7 @@ msr3_duplicate (MS3Record *msr, int8_t datadup)
 
     if (samplesize == 0)
     {
-      ms_log (2, "%s(): unrecognized sample type: '%c'\n", __func__, msr->sampletype);
+      ms_log (2, "Unrecognized sample type: '%c'\n", msr->sampletype);
       msr3_free (&dupmsr);
       return NULL;
     }
@@ -166,7 +173,7 @@ msr3_duplicate (MS3Record *msr, int8_t datadup)
     /* Allocate memory for new data array */
     if ((dupmsr->datasamples = libmseed_memory.malloc ((size_t) (datasize))) == NULL)
     {
-      ms_log (2, "%s(): Error allocating memory\n", __func__);
+      ms_log (2, "Error allocating memory\n");
       msr3_free (&dupmsr);
       return NULL;
     }
@@ -230,14 +237,14 @@ msr3_endtime (MS3Record *msr)
 void
 msr3_print (MS3Record *msr, int8_t details)
 {
-  char time[30];
+  char time[40];
   char b;
 
   if (!msr)
     return;
 
   /* Generate a start time string */
-  ms_nstime2timestr (msr->starttime, time, 2, 1);
+  ms_nstime2timestr (msr->starttime, time, ISOMONTHDAY_DOY_Z, NANO_MICRO);
 
   /* Report information in the fixed header */
   if (details > 0)
@@ -252,8 +259,8 @@ msr3_print (MS3Record *msr, int8_t details)
     {
       b = msr->flags;
       ms_log (0, "                  flags: [%d%d%d%d%d%d%d%d] 8 bits\n",
-              bit (b, 0x01), bit (b, 0x02), bit (b, 0x04), bit (b, 0x08),
-              bit (b, 0x10), bit (b, 0x20), bit (b, 0x40), bit (b, 0x80));
+              bit (b, 0x80), bit (b, 0x40), bit (b, 0x20), bit (b, 0x10),
+              bit (b, 0x08), bit (b, 0x04), bit (b, 0x02), bit (b, 0x01));
       if (b & 0x01)
         ms_log (0, "                         [Bit 0] Calibration signals present\n");
       if (b & 0x02)
@@ -301,6 +308,8 @@ msr3_print (MS3Record *msr, int8_t details)
  * @param[in] msr ::MS3Record to resize buffer
  *
  * @returns Return 0 on success, otherwise returns a libmseed error code.
+ *
+ * \ref MessageOnError - this function logs a message on error
  ***************************************************************************/
 int
 msr3_resize_buffer (MS3Record *msr)
@@ -309,7 +318,10 @@ msr3_resize_buffer (MS3Record *msr)
   size_t datasize;
 
   if (!msr)
+  {
+    ms_log (2, "Required argument not defined: 'msr'\n");
     return MS_GENERROR;
+  }
 
   samplesize = ms_samplesize(msr->sampletype);
 
@@ -323,7 +335,7 @@ msr3_resize_buffer (MS3Record *msr)
 
       if (msr->datasamples == NULL)
       {
-        ms_log (2, "%s(%s): Cannot (re)allocate memory\n", __func__, msr->sid);
+        ms_log (2, "%s: Cannot (re)allocate memory\n", msr->sid);
         return MS_GENERROR;
       }
 

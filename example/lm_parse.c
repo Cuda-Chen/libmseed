@@ -3,7 +3,7 @@
  *
  * This file is part of the miniSEED Library.
  *
- * Copyright (c) 2019 Chad Trabant, IRIS Data Management Center
+ * Copyright (c) 2020 Chad Trabant, IRIS Data Management Center
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,10 +36,10 @@ static flag tracegap   = 0;
 static int printraw    = 0;
 static int printdata   = 0;
 static int reclen      = -1;
-static char *inputfile = 0;
+static char *inputfile = NULL;
 
 static int parameter_proc (int argcount, char **argvec);
-static void print_stderr (char *message);
+static void print_stderr (const char *message);
 static void usage (void);
 
 /* Binary I/O for Windows platforms */
@@ -62,12 +62,15 @@ main (int argc, char **argv)
   /* Redirect libmseed logging facility to stderr for consistency */
   ms_loginit (print_stderr, NULL, print_stderr, NULL);
 
-  /* Process given parameters (command line and parameter file) */
+  /* Process command line arguments */
   if (parameter_proc (argc, argv) < 0)
     return -1;
 
   /* Validate CRC and unpack data samples */
   flags |= MSF_VALIDATECRC;
+
+  /* Parse byte range from file/URL path name if present */
+  flags |= MSF_PNAMERANGE;
 
   if (printdata)
     flags |= MSF_UNPACKDATA;
@@ -187,7 +190,7 @@ main (int argc, char **argv)
 
 /***************************************************************************
  * parameter_proc():
- * Process the command line parameters.
+ * Process the command line arguments.
  *
  * Returns 0 on success, and -1 on failure
  ***************************************************************************/
@@ -247,7 +250,7 @@ parameter_proc (int argcount, char **argvec)
       ms_log (2, "Unknown option: %s\n", argvec[optind]);
       exit (1);
     }
-    else if (inputfile == 0)
+    else if (inputfile == NULL)
     {
       inputfile = argvec[optind];
     }
@@ -267,6 +270,10 @@ parameter_proc (int argcount, char **argvec)
     exit (1);
   }
 
+  /* Add program name and version to User-Agent for URL-based requests */
+  if (libmseed_url_support() && ms3_url_useragent(PACKAGE, VERSION))
+    return -1;
+
   /* Report the program version */
   if (verbose)
     ms_log (1, "%s version: %s\n", PACKAGE, VERSION);
@@ -279,7 +286,7 @@ parameter_proc (int argcount, char **argvec)
  * Print messsage to stderr.
  ***************************************************************************/
 static void
-print_stderr (char *message)
+print_stderr (const char *message)
 {
   fprintf (stderr, "%s", message);
 } /* End of print_stderr() */

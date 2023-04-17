@@ -1,5 +1,5 @@
 /***************************************************************************
- * Interface declarations for the miniSEED unpacking routines in unpack.c
+ * Interface declarations for routines in fio.c
  *
  * This file is part of the miniSEED Library.
  *
@@ -18,8 +18,8 @@
  * limitations under the License.
  ***************************************************************************/
 
-#ifndef UNPACK_H
-#define UNPACK_H 1
+#ifndef MSIO_H
+#define MSIO_H 1
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,15 +27,15 @@ extern "C" {
 
 #include "libmseed.h"
 
-extern int64_t msr3_unpack_mseed3 (char *record, int reclen, MS3Record **ppmsr,
-                                   uint32_t flags, int8_t verbose);
-extern int64_t msr3_unpack_mseed2 (char *record, int reclen, MS3Record **ppmsr,
-                                   uint32_t flags, int8_t verbose);
-
-extern double ms_nomsamprate (int factor, int multiplier);
-extern char *ms2_recordsid (char *record, char *sid, int sidlen);
-extern const char *ms2_blktdesc (uint16_t blkttype);
-uint16_t ms2_blktlen (uint16_t blkttype, const char *blkt, int8_t swapflag);
+extern int msio_fopen (LMIO *io, const char *path, const char *mode,
+                       int64_t *startoffset, int64_t *endoffset);
+extern int msio_fclose (LMIO *io);
+extern size_t msio_fread (LMIO *io, void *buffer, size_t size);
+extern int msio_feof (LMIO *io);
+extern int msio_url_useragent (const char *program, const char *version);
+extern int msio_url_userpassword (const char *userpassword);
+extern int msio_url_addheader (const char *header);
+extern void msio_url_freeheaders (void);
 
 #ifdef __cplusplus
 }
