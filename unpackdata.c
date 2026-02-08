@@ -19,14 +19,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  ************************************************************************/
-
+#if 1
 #include <memory.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "libmseed.h"
 #include "unpackdata.h"
-
+#endif
 /* Extract bit range.  Byte order agnostic & defined when used with unsigned values */
 #define EXTRACTBITRANGE(VALUE, STARTBIT, LENGTH) (((VALUE) >> (STARTBIT)) & ((1U << (LENGTH)) - 1))
 
@@ -344,6 +344,162 @@ msr_decode_steim1 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
   return outputidx;
 } /* End of msr_decode_steim1() */
 
+// helper functions of steim2 decode
+
+// datatype helper macro
+#define dd()                                                                   \
+  union dword                                                                  \
+  {                                                                            \
+    int8_t d8[4];                                                              \
+    int32_t d32;                                                               \
+  } *word;                                                                     \
+                                                                               \
+  /* Bitfield specifications for sign extension of various bit-width values */ \
+  struct                                                                       \
+  {                                                                            \
+    signed int x : 4;                                                          \
+  } s4;                                                                        \
+  struct                                                                       \
+  {                                                                            \
+    signed int x : 5;                                                          \
+  } s5;                                                                        \
+  struct                                                                       \
+  {                                                                            \
+    signed int x : 6;                                                          \
+  } s6;                                                                        \
+  struct                                                                       \
+  {                                                                            \
+    signed int x : 10;                                                         \
+  } s10;                                                                       \
+  struct                                                                       \
+  {                                                                            \
+    signed int x : 15;                                                         \
+  } s15;                                                                       \
+  struct                                                                       \
+  {                                                                            \
+    signed int x : 30;                                                         \
+  } s30;
+
+static int inline fnoop (uint32_t frame, int32_t *diff, int *diffidx)
+{
+  return 0;
+}
+
+static int inline f01 (uint32_t frame, int32_t *diff, int *diffidx)
+{
+  dd ()
+
+      word = (union dword *)&frame;
+  int idx;
+  for (idx = 0; idx < 4; idx++)
+  {
+    diff[(*diffidx)++] = word->d8[idx];
+  }
+
+  return 0;
+}
+
+static int inline f1000 (uint32_t frame, int32_t *diff, int *diffidx)
+{
+  return -1;
+}
+
+static int inline f1001 (uint32_t frame, int32_t *diff, int *diffidx)
+{
+  dd () diff[(*diffidx)++] = (s30.x = EXTRACTBITRANGE (frame, 0, 30));
+
+  return 0;
+}
+
+static int inline f1010 (uint32_t frame, int32_t *diff, int *diffidx)
+{
+
+  int idx;
+  dd () for (idx = 0; idx < 2; idx++)
+  {
+    diff[(*diffidx)++] = (s15.x = EXTRACTBITRANGE (frame, (15 - idx * 15), 15));
+  }
+
+
+  return 0;
+}
+
+static int inline f1011 (uint32_t frame, int32_t *diff, int *diffidx)
+{
+
+  dd () int idx;
+  for (idx = 0; idx < 3; idx++)
+  {
+    diff[(*diffidx)++] = (s10.x = EXTRACTBITRANGE (frame, (20 - idx * 10), 10));
+  }
+
+
+  return 0;
+}
+
+static int inline f1100 (uint32_t frame, int32_t *diff, int *diffidx)
+{
+
+  dd () int idx;
+  for (idx = 0; idx < 5; idx++)
+  {
+    diff[(*diffidx)++] = (s6.x = EXTRACTBITRANGE (frame, (24 - idx * 6), 6));
+  }
+
+
+  return 0;
+}
+
+static int inline f1101 (uint32_t frame, int32_t *diff, int *diffidx)
+{
+  dd () int idx;
+  for (idx = 0; idx < 6; idx++)
+  {
+    diff[(*diffidx)++] = (s5.x = EXTRACTBITRANGE (frame, (25 - idx * 5), 5));
+  }
+
+
+  return 0;
+}
+
+static int inline f1110 (uint32_t frame, int32_t *diff, int *diffidx)
+{
+
+  dd () int idx;
+  for (idx = 0; idx < 7; idx++)
+  {
+    diff[(*diffidx)++] = (s4.x = EXTRACTBITRANGE (frame, (24 - idx * 4), 4));
+  }
+
+
+  return 0;
+}
+
+static int inline f1111 (uint32_t frame, int32_t *diff, int *diffidx)
+{
+  return -1;
+}
+
+typedef int (*steim2_decode_func_cb) (uint32_t , /* input frame */
+                                      int32_t *,  /* output difference array */
+                                      int *      /* output difference array index */
+);
+
+static steim2_decode_func_cb __steim2_decode_func_tbl[16] = {
+    fnoop, fnoop, fnoop, fnoop, f01,   f01,   f01,   f01,
+    f1000, f1001, f1010, f1011, f1100, f1101, f1110, f1111,
+};
+
+/* Get two LSB from nibble */
+static void steim2_get_nibble_in_binary(int a, char *buf, int buf_size) {
+    buf += (buf_size - 1);
+    for(int i = 1; i >= 0; i--) {
+        *buf = '0' + (a & 1);
+        a >>= 1;
+        buf--;
+    }
+}
+
 /************************************************************************
  * msr_decode_steim2:
  *
@@ -369,37 +525,7 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
   int dnib;
   int idx;
 
-  union dword
-  {
-    int8_t d8[4];
-    int32_t d32;
-  } *word;
-
-  /* Bitfield specifications for sign extension of various bit-width values */
-  struct
-  {
-    signed int x : 4;
-  } s4;
-  struct
-  {
-    signed int x : 5;
-  } s5;
-  struct
-  {
-    signed int x : 6;
-  } s6;
-  struct
-  {
-    signed int x : 10;
-  } s10;
-  struct
-  {
-    signed int x : 15;
-  } s15;
-  struct
-  {
-    signed int x : 30;
-  } s30;
+  dd()
 
   if (maxframes == 0)
     return 0;
@@ -464,6 +590,7 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
       /* W0: the first 32-bit quantity contains 16 x 2-bit nibbles (high order bits) */
       nibble = EXTRACTBITRANGE (frame[0], (30 - (2 * widx)), 2);
 
+#if 1
       switch (nibble)
       {
       case 0: /* nibble=00: Special flag, no differences */
@@ -584,7 +711,158 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
         }
 
         break;
-      } /* Done with decoding 32-bit word based on nibble */
+      }
+#endif
+
+#if 0
+      uint32_t x, y, mask;
+      x = frame[widx];
+      y = x;
+      ms_gswap4 (&y);
+      mask = (-!!((nibble) != 0x01)) & (-!!swapflag); /* always set mask to '0x0' if nibble=0x01 */
+      frame[widx] = (x & ~mask) | (y & mask);
+#endif
+#if 0
+      if (swapflag && (nibble == 0x02 || nibble == 0x03))
+          ms_gswap4 (&frame[widx]);
+      dnib = EXTRACTBITRANGE (frame[widx], 30, 2);
+      uint32_t ii = ((nibble & 0x03) << 2) | (dnib & 0x03);
+
+      /*if((ii == 0x08) || (ii == 0x0f)) // 0b1000 and 0b1111
+          return -1;*/
+
+      const int sz = 2;
+      char n_str[sz + 1], d_str[sz + 1];
+
+      int base[4] = {0, 4, 0, 1,};
+      uint32_t increment_mask[4] = {0x0, 0x0, 0x07, 0x07,};
+      int cnt = base[nibble & 0x03] + (ii & increment_mask[nibble & 0x03]);
+
+      int start_bit_pos[16] = {
+          0, 0, 0, 0,
+          24, 24, 24, 24,
+          0, 0, 15, 20,
+          24, 25, 24, 0, 
+      };
+      int bb[16] = { 
+          0, 0, 0, 0,
+          8, 8, 8, 8,
+          0, 30, 15, 10,
+          6, 5, 4, 0,
+      }; // bit count of storing diff
+#endif 
+#if 0
+      for (idx = 0; idx < cnt; idx++)
+      {        
+        int bit_count = bb[ii & 0x0f];
+        int shift = 32 - bit_count;
+        /* The nibble=0x01 needs extra treatment as there are no
+        * any defintion of little-endian Steim2 SEED.
+        * See https://github.com/EarthScope/libmseed/issues/36#issuecomment-470370790
+        * for more details.
+        */
+        int start = start_bit_pos[ii & 0x0f] - (
+                nibble == 0x01
+                ? cnt - idx - 1 
+                : idx) * bit_count;
+        //uint32_t t = EXTRACTBITRANGE(frame[widx], start, bit_count);
+        /*uint32_t t = (((frame[widx]) >> (start)) & (((uint32_t)0x1 << (bit_count)) - 1));
+        int32_t tmp = t << shift;
+        diff[diffidx++] = tmp >> shift;*/
+        /*diff[diffidx++] = (int32_t)((
+                EXTRACTBITRANGE(frame[widx], (start_bit_pos[ii & 0x0f] - idx * bit_count), bit_count)
+                ) << (shift)) >> (shift);*/
+        int32_t m = 1U << (bit_count - 1); 
+        //int32_t t = (((frame[widx]) >> (start)) & ((1U << (bit_count)) - 1));
+        int32_t t = EXTRACTBITRANGE(frame[widx], start, bit_count);
+        int32_t tmp = (t ^ m) - m;
+        diff[diffidx++] = tmp; 
+      }
+#endif
+#if 0
+      ii &= 0x0f;
+      int ret = -1;
+#define _(func) \
+      ret = func(frame[widx], diff, &diffidx)
+
+      __builtin_prefetch(&diff[diffidx]);
+
+      switch(ii) {
+          case 0x00:
+          case 0x01:
+          case 0x02:
+          case 0x03:
+              _(fnoop);
+              break;
+          case 0x04:
+          case 0x05:
+          case 0x06:
+          case 0x07:
+            _(f01);
+            break;
+          case 0x09:
+            _(f1001);
+            break;
+          case 0x0a:
+            _(f1010);
+            break;
+          case 0x0b:
+            _(f1011);
+            break;
+          case 0x0c:
+            _(f1100);
+            break;
+          case 0x0d:
+            _(f1101);
+            break;
+          case 0x0e:
+            _(f1110);
+            break;
+          default:
+            steim2_get_nibble_in_binary(nibble, n_str, sz);
+            steim2_get_nibble_in_binary(dnib, d_str, sz);
+            n_str[sz] = '\0';
+            d_str[sz] = '\0';
+            ms_log (2, "%s: Impossible Steim2 dnib=%s for nibble=%s\n", srcname, n_str, d_str);
+            return -1;
+      }
+#undef _
+
+#endif
+#if 0
+      steim2_decode_func_cb handler = __steim2_decode_func_tbl[ii & 0x0f];
+      if(!handler)
+          return -1;
+      int ret = handler (frame[widx], diff, &diffidx);
+      if(ret != 0) {
+            steim2_get_nibble_in_binary(nibble, n_str, sz);
+            steim2_get_nibble_in_binary(dnib, d_str, sz);
+            n_str[sz] = '\0';
+            d_str[sz] = '\0';
+            ms_log (2, "%s: Impossible Steim2 dnib=%s for nibble=%s\n", srcname, n_str, d_str);
+            return -1;
+      }
+
+#endif
+#if 0
+#if DECODE_DEBUG
+      steim2_get_nibble_in_binary(nibble, n_str, sz);
+      steim2_get_nibble_in_binary(dnib, d_str, sz);
+            n_str[sz] = '\0';
+            d_str[sz] = '\0';
+      if(nibble == 0x0)
+          ms_log (0, "  W%02d: 00=special", widx);
+      else if(nibble == 0x01)
+        ms_log (0, "  W%02d: 01=4x8b  ", widx);
+      else
+        ms_log (0, "  W%02d: %s,%s=%dx%db  ", widx, n_str, d_str, cnt, bb[ii & 0x0f]);
+
+      for(idx = cnt; idx >= 1; idx--)
+          ms_log(0, "%d  ", diff[diffidx - idx]);
+      ms_log(0, "\n");
+#endif
+#endif
+      /* Done with decoding 32-bit word based on nibble */
     } /* Done looping over nibbles and 32-bit words */
 
     /* Apply differences in this frame to calculate output samples,
