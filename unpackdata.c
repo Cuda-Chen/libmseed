@@ -893,6 +893,9 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
             break;
         }
     }
+    for(int i = 0; i < 16; i++)
+        fprintf(stderr, "%d ", cc[i]);
+    fprintf(stderr, "\n");
 
     /* Apply differences in this frame to calculate output samples,
      * ignoring first difference for first frame */
