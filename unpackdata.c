@@ -525,6 +525,7 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
   int dnib;
   int idx;
 
+  int cc[16] = {0}; // count of decoded diffs in each frame
   dd()
 
   if (maxframes == 0)
@@ -603,6 +604,7 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
         break;
       case 1: /* nibble=01: Four 8-bit differences, starting at high order bits */
         word = (union dword *)&frame[widx];
+        cc[widx] = 4;
         for (idx = 0; idx < 4; idx++)
         {
           diff[diffidx++] = word->d8[idx];
@@ -629,6 +631,7 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
           break;
 
         case 1: /* nibble=10, dnib=01: One 30-bit difference */
+          cc[widx] = 1;
           diff[diffidx++] = (s30.x = EXTRACTBITRANGE (frame[widx], 0, 30));
           localdiff[localdiffidx++] = (s30.x = EXTRACTBITRANGE (frame[widx], 0, 30));
 
@@ -638,6 +641,7 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
           break;
 
         case 2: /* nibble=10, dnib=10: Two 15-bit differences, starting at high order bits */
+          cc[widx] = 2;
           for (idx = 0; idx < 2; idx++)
           {
             diff[diffidx++] = (s15.x = EXTRACTBITRANGE (frame[widx], (15 - idx * 15), 15));
@@ -650,6 +654,7 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
           break;
 
         case 3: /* nibble=10, dnib=11: Three 10-bit differences, starting at high order bits */
+          cc[widx] = 3;
           for (idx = 0; idx < 3; idx++)
           {
             diff[diffidx++] = (s10.x = EXTRACTBITRANGE (frame[widx], (20 - idx * 10), 10));
@@ -673,6 +678,7 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
         switch (dnib)
         {
         case 0: /* nibble=11, dnib=00: Five 6-bit differences, starting at high order bits */
+          cc[widx] = 5;
           for (idx = 0; idx < 5; idx++)
           {
             diff[diffidx++] = (s6.x = EXTRACTBITRANGE (frame[widx], (24 - idx * 6), 6));
@@ -686,6 +692,7 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
           break;
 
         case 1: /* nibble=11, dnib=01: Six 5-bit differences, starting at high order bits */
+          cc[widx] = 6;
           for (idx = 0; idx < 6; idx++)
           {
             diff[diffidx++] = (s5.x = EXTRACTBITRANGE (frame[widx], (25 - idx * 5), 5));
@@ -700,6 +707,7 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
           break;
 
         case 2: /* nibble=11, dnib=10: Seven 4-bit differences, starting at high order bits */
+          cc[widx] = 7;
           for (idx = 0; idx < 7; idx++)
           {
             diff[diffidx++] = (s4.x = EXTRACTBITRANGE (frame[widx], (24 - idx * 4), 4));
