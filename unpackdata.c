@@ -526,6 +526,7 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
   int idx;
 
   int cc[16] = {0}; // count of decoded diffs in each frame
+  int32_t diff_total[128]; // Difference values with max 16 x 8 (4-bit samples)
   dd()
 
   if (maxframes == 0)
@@ -880,6 +881,7 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
       ms_log(0, "\n");
 #endif
 #endif
+      memcpy(diff_total + 8 * widx, localdiff, sizeof(localdiff));
       /* Done with decoding 32-bit word based on nibble */
     } /* Done looping over nibbles and 32-bit words */
 
