@@ -590,6 +590,9 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
       /* W0: the first 32-bit quantity contains 16 x 2-bit nibbles (high order bits) */
       nibble = EXTRACTBITRANGE (frame[0], (30 - (2 * widx)), 2);
 
+      int32_t localdiff[8] = { 0 };
+      int localdiffidx = 0;
+
 #if 1
       switch (nibble)
       {
@@ -603,6 +606,7 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
         for (idx = 0; idx < 4; idx++)
         {
           diff[diffidx++] = word->d8[idx];
+          localdiff[localdiffidx++] = word->d8[idx];
         }
 
 #if DECODE_DEBUG
@@ -626,6 +630,7 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
 
         case 1: /* nibble=10, dnib=01: One 30-bit difference */
           diff[diffidx++] = (s30.x = EXTRACTBITRANGE (frame[widx], 0, 30));
+          localdiff[localdiffidx++] = (s30.x = EXTRACTBITRANGE (frame[widx], 0, 30));
 
 #if DECODE_DEBUG
           ms_log (0, "  W%02d: 10,01=1x30b  %d\n", widx, diff[diffidx - 1]);
@@ -636,6 +641,7 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
           for (idx = 0; idx < 2; idx++)
           {
             diff[diffidx++] = (s15.x = EXTRACTBITRANGE (frame[widx], (15 - idx * 15), 15));
+            localdiff[localdiffidx++] = (s15.x = EXTRACTBITRANGE (frame[widx], (15 - idx * 15), 15));
           }
 
 #if DECODE_DEBUG
@@ -647,6 +653,7 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
           for (idx = 0; idx < 3; idx++)
           {
             diff[diffidx++] = (s10.x = EXTRACTBITRANGE (frame[widx], (20 - idx * 10), 10));
+            localdiff[localdiffidx++] = (s10.x = EXTRACTBITRANGE (frame[widx], (20 - idx * 10), 10));
           }
 
 #if DECODE_DEBUG
@@ -669,6 +676,7 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
           for (idx = 0; idx < 5; idx++)
           {
             diff[diffidx++] = (s6.x = EXTRACTBITRANGE (frame[widx], (24 - idx * 6), 6));
+            localdiff[localdiffidx++] = (s6.x = EXTRACTBITRANGE (frame[widx], (24 - idx * 6), 6));
           }
 
 #if DECODE_DEBUG
@@ -681,6 +689,7 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
           for (idx = 0; idx < 6; idx++)
           {
             diff[diffidx++] = (s5.x = EXTRACTBITRANGE (frame[widx], (25 - idx * 5), 5));
+            localdiff[localdiffidx++] = (s5.x = EXTRACTBITRANGE (frame[widx], (25 - idx * 5), 5));
           }
 
 #if DECODE_DEBUG
@@ -694,6 +703,7 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
           for (idx = 0; idx < 7; idx++)
           {
             diff[diffidx++] = (s4.x = EXTRACTBITRANGE (frame[widx], (24 - idx * 4), 4));
+            localdiff[localdiffidx++] = (s4.x = EXTRACTBITRANGE (frame[widx], (24 - idx * 4), 4));
           }
 
 #if DECODE_DEBUG
