@@ -885,6 +885,15 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
       /* Done with decoding 32-bit word based on nibble */
     } /* Done looping over nibbles and 32-bit words */
 
+    /* Check the first non-zero index of diff_total (diff data starts from this frame). */
+    int iii = 0;
+    for(int i = 0; i < 16; i++) {
+        if(cc[i] != 0) {
+            iii = i;
+            break;
+        }
+    }
+
     /* Apply differences in this frame to calculate output samples,
      * ignoring first difference for first frame */
     for (idx = (frameidx == 0) ? 1 : 0; idx < diffidx && outputidx < samplecount;
