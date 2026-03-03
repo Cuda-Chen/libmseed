@@ -881,10 +881,6 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
       ms_log(0, "\n");
 #endif
 #endif
-      fprintf(stderr, "===");
-      for(int i = 0; i < cc[i]; i++)
-          fprintf(stderr, " %d : %d ", diff[diffidx - cc[i] + i], localdiff[i]);
-      fprintf(stderr, "===\n");
       memcpy(diff_total + 8 * widx, localdiff, sizeof(localdiff));
       /* Done with decoding 32-bit word based on nibble */
     } /* Done looping over nibbles and 32-bit words */

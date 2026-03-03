@@ -5,7 +5,7 @@
 #   CFLAGS : Specify compiler options to use
 #   LDFLAGS : Specify linker options to use
 #   CPPFLAGS : Specify c-preprocessor options to use
-
+CFLAGS := -I.
 # Extract version from libmseed.h, expected line should include LIBMSEED_VERSION "#.#.#"
 MAJOR_VER = $(shell grep LIBMSEED_VERSION libmseed.h | grep -Eo '[0-9]+.[0-9]+.[0-9]+' | cut -d . -f 1)
 FULL_VER = $(shell grep LIBMSEED_VERSION libmseed.h | grep -Eo '[0-9]+.[0-9]+.[0-9]+')
@@ -23,7 +23,8 @@ MAN3DIR ?= $(MANDIR)/man3
 
 LIB_SRCS = fileutils.c genutils.c msio.c lookup.c yyjson.c msrutils.c \
            extraheaders.c pack.c packdata.c tracelist.c gmtime64.c crc32c.c \
-           parseutils.c unpack.c unpackdata.c selection.c logging.c
+           parseutils.c unpack.c unpackdata.c selection.c logging.c \
+		   decode_rodeo.c
 
 LIB_OBJS = $(LIB_SRCS:.c=.o)
 LIB_LOBJS = $(LIB_SRCS:.c=.lo)
