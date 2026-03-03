@@ -526,7 +526,7 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
   int idx;
 
   int cc[16] = {0}; // count of decoded diffs in each frame
-  int32_t diff_total[128]; // Difference values with max 16 x 8 (4-bit samples)
+  int32_t diff_total[128] = { 0 }; // Difference values with max 16 x 8 (4-bit samples)
   dd()
 
   if (maxframes == 0)
@@ -881,29 +881,39 @@ msr_decode_steim2 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
       ms_log(0, "\n");
 #endif
 #endif
+      fprintf(stderr, "===");
+      for(int i = 0; i < cc[i]; i++)
+          fprintf(stderr, " %d : %d ", diff[diffidx - cc[i] + i], localdiff[i]);
+      fprintf(stderr, "===\n");
       memcpy(diff_total + 8 * widx, localdiff, sizeof(localdiff));
       /* Done with decoding 32-bit word based on nibble */
     } /* Done looping over nibbles and 32-bit words */
 
-    /* Check the first non-zero index of diff_total (diff data starts from this frame). */
-    int iii = 0;
+    int sum = 0;
     for(int i = 0; i < 16; i++) {
-        if(cc[i] != 0) {
-            iii = i;
-            break;
+        //fprintf(stderr, "%d ", cc[i]);
+        sum += cc[i];
+        int ii;
+        for(idx = 0, ii = (frameidx == 0) ? 1 : 0; 
+                idx < cc[i] && outputidx < samplecount; 
+                idx++, outputidx++, ii++
+           ) {
+            /*if(diff_total[8 * i + idx] != diff[ii])
+                fprintf(stderr, "=== %d %d %d %d ===\n", 8 * i + idx, ii, diff_total[8 * i + idx], diff[ii]);*/
+            output[outputidx] = output[outputidx - 1] + diff_total[8 * i  + idx];
         }
     }
-    for(int i = 0; i < 16; i++)
-        fprintf(stderr, "%d ", cc[i]);
-    fprintf(stderr, "\n");
+    //fprintf(stderr, "\n");
 
     /* Apply differences in this frame to calculate output samples,
      * ignoring first difference for first frame */
+#if 0
     for (idx = (frameidx == 0) ? 1 : 0; idx < diffidx && outputidx < samplecount;
          idx++, outputidx++)
     {
       output[outputidx] = output[outputidx - 1] + diff[idx];
     }
+#endif
   } /* Done looping over frames */
 
   /* Check data integrity by comparing last sample to Xn (reverse integration constant) */
