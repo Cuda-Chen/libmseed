@@ -364,6 +364,86 @@ msr_decode_steim1 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
  * Uses arithmetic right shift, which is 2 instructions on x86 (shl + sar). */
 #define SIGN_EXTEND(val, bits) ((int32_t)((uint32_t)(val) << (32 - (bits))) >> (32 - (bits)))
 
+#if defined(__SSE4_1__)
+#include <smmintrin.h>
+static inline __m128i prefix_sum_epi32_ (__m128i d, int32_t carry) {
+  d = _mm_add_epi32 (d, _mm_slli_si128 (d, 4));
+  d = _mm_add_epi32 (d, _mm_slli_si128 (d, 8));
+  d = _mm_add_epi32 (d, _mm_set1_epi32 (carry));
+  return d;
+}
+#endif
+
+#define STEIM2_DECODE_4X8B_SCALAR()                                                \
+  do {                                                                             \
+    const int8_t *bytes = (const int8_t *)&fptr[widx];                             \
+    if (__builtin_expect (!skip_first, 1)) {                                       \
+      prev = (int32_t)((uint32_t)prev + (uint32_t)bytes[0]);                       \
+      output[outputidx++] = prev;                                                  \
+    } else { skip_first = 0; }                                                     \
+    if (outputidx < samplecount) {                                                 \
+      prev = (int32_t)((uint32_t)prev + (uint32_t)bytes[1]);                       \
+      output[outputidx++] = prev;                                                  \
+    }                                                                              \
+    if (outputidx < samplecount) {                                                 \
+      prev = (int32_t)((uint32_t)prev + (uint32_t)bytes[2]);                       \
+      output[outputidx++] = prev;                                                  \
+    }                                                                              \
+    if (outputidx < samplecount) {                                                 \
+      prev = (int32_t)((uint32_t)prev + (uint32_t)bytes[3]);                       \
+      output[outputidx++] = prev;                                                  \
+    }                                                                              \
+  } while (0)
+
+#define STEIM2_DECODE_3X10B_SCALAR()                                               \
+  do {                                                                             \
+    if (__builtin_expect (!skip_first, 1)) {                                       \
+      prev = (int32_t)((uint32_t)prev + (uint32_t)SIGN_EXTEND (w >> 20, 10));      \
+      output[outputidx++] = prev;                                                  \
+    } else { skip_first = 0; }                                                     \
+    if (outputidx < samplecount) {                                                 \
+      prev = (int32_t)((uint32_t)prev + (uint32_t)SIGN_EXTEND (w >> 10, 10));      \
+      output[outputidx++] = prev;                                                  \
+    }                                                                              \
+    if (outputidx < samplecount) {                                                 \
+      prev = (int32_t)((uint32_t)prev + (uint32_t)SIGN_EXTEND (w, 10));            \
+      output[outputidx++] = prev;                                                  \
+    }                                                                              \
+  } while (0)
+
+#if defined(__SSE4_1__)
+#define STEIM2_DECODE_4X8B()                                                       \
+  do {                                                                             \
+    if (__builtin_expect (!skip_first && (outputidx + 3 < samplecount), 1)) {     \
+      __m128i bytes = _mm_cvtsi32_si128 (*(const int32_t *)&fptr[widx]);           \
+      __m128i diffs = _mm_cvtepi8_epi32 (bytes);                                   \
+      __m128i result = prefix_sum_epi32_ (diffs, prev);                            \
+      _mm_storeu_si128 ((__m128i *)&output[outputidx], result);                    \
+      prev = _mm_extract_epi32 (result, 3);                                        \
+      outputidx += 4;                                                              \
+    } else { STEIM2_DECODE_4X8B_SCALAR(); }                                        \
+  } while (0)
+
+#define STEIM2_DECODE_3X10B()                                                      \
+  do {                                                                             \
+    if (__builtin_expect (!skip_first && (outputidx + 2 < samplecount), 1)) {     \
+      int32_t d0 = SIGN_EXTEND (w >> 20, 10);                                      \
+      int32_t d1 = SIGN_EXTEND (w >> 10, 10);                                      \
+      int32_t d2 = SIGN_EXTEND (w, 10);                                            \
+      __m128i diffs = _mm_set_epi32 (0, d2, d1, d0);                               \
+      __m128i result = prefix_sum_epi32_ (diffs, prev);                            \
+      output[outputidx] = _mm_extract_epi32 (result, 0);                           \
+      output[outputidx + 1] = _mm_extract_epi32 (result, 1);                       \
+      output[outputidx + 2] = _mm_extract_epi32 (result, 2);                       \
+      prev = _mm_extract_epi32 (result, 2);                                        \
+      outputidx += 3;                                                              \
+    } else { STEIM2_DECODE_3X10B_SCALAR(); }                                       \
+  } while (0)
+#else
+#define STEIM2_DECODE_4X8B() STEIM2_DECODE_4X8B_SCALAR()
+#define STEIM2_DECODE_3X10B() STEIM2_DECODE_3X10B_SCALAR()
+#endif
+
 /*
  * Optimized Steim2 decode inner loop, generated as a macro-template
  * to produce two compile-time-specialized versions:
@@ -377,6 +457,7 @@ msr_decode_steim1 (int32_t *input, uint64_t inputlength, uint64_t samplecount, i
  *   - Fully unrolled bit extractions per encoding case
  *   - Shift-based sign extension (2 instructions on x86)
  *   - swapflag is a compile-time constant, eliminating per-word branches
+ *   - SIMD SSE4.1 prefix-sum integration for 4x8b and 3x10b (hot paths)
  */
 #define STEIM2_DECODE_IMPL(FUNCNAME, STEIM2_SWAP)                                                  \
 static int64_t                                                                                     \
@@ -443,27 +524,9 @@ FUNCNAME (const uint32_t *input, uint64_t maxframes, uint64_t samplecount,      
         break;                                                                                     \
                                                                                                    \
       case 0x4: case 0x5: case 0x6: case 0x7:                                                     \
-      {                                                                                            \
         /* nibble=01: Four 8-bit differences (byte access, no swap needed) */                      \
-        const int8_t *bytes = (const int8_t *)&fptr[widx];                                         \
-        if (__builtin_expect (!skip_first, 1)) {                                                   \
-          prev = (int32_t)((uint32_t)prev + (uint32_t)bytes[0]);                                   \
-          output[outputidx++] = prev;                                                              \
-        } else { skip_first = 0; }                                                                 \
-        if (outputidx < samplecount) {                                                             \
-          prev = (int32_t)((uint32_t)prev + (uint32_t)bytes[1]);                                   \
-          output[outputidx++] = prev;                                                              \
-        }                                                                                          \
-        if (outputidx < samplecount) {                                                             \
-          prev = (int32_t)((uint32_t)prev + (uint32_t)bytes[2]);                                   \
-          output[outputidx++] = prev;                                                              \
-        }                                                                                          \
-        if (outputidx < samplecount) {                                                             \
-          prev = (int32_t)((uint32_t)prev + (uint32_t)bytes[3]);                                   \
-          output[outputidx++] = prev;                                                              \
-        }                                                                                          \
+        STEIM2_DECODE_4X8B();                                                                      \
         break;                                                                                     \
-      }                                                                                            \
                                                                                                    \
       case 0x8: /* nibble=10, dnib=00: Error */                                                    \
         ms_log (2, "%s: Impossible Steim2 dnib=00 for nibble=10\n", srcname);                      \
@@ -488,18 +551,7 @@ FUNCNAME (const uint32_t *input, uint64_t maxframes, uint64_t samplecount,      
         break;                                                                                     \
                                                                                                    \
       case 0xB: /* nibble=10, dnib=11: Three 10-bit differences */                                 \
-        if (__builtin_expect (!skip_first, 1)) {                                                   \
-          prev = (int32_t)((uint32_t)prev + (uint32_t)SIGN_EXTEND (w >> 20, 10));                  \
-          output[outputidx++] = prev;                                                              \
-        } else { skip_first = 0; }                                                                 \
-        if (outputidx < samplecount) {                                                             \
-          prev = (int32_t)((uint32_t)prev + (uint32_t)SIGN_EXTEND (w >> 10, 10));                  \
-          output[outputidx++] = prev;                                                              \
-        }                                                                                          \
-        if (outputidx < samplecount) {                                                             \
-          prev = (int32_t)((uint32_t)prev + (uint32_t)SIGN_EXTEND (w, 10));                        \
-          output[outputidx++] = prev;                                                              \
-        }                                                                                          \
+        STEIM2_DECODE_3X10B();                                                                     \
         break;                                                                                     \
                                                                                                    \
       case 0xC: /* nibble=11, dnib=00: Five 6-bit differences */                                   \
